@@ -5,6 +5,8 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Image Cropper</title>
+    <link  href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.12/cropper.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.2" integrity="sha384-L6OqL9pRWyyFU3+/bjdSri+iIphTN/bvYyM37tICVyOJkWZLpP2vGn6VUEXgzg6h" crossorigin="anonymous"></script>
 </head>
@@ -21,7 +23,7 @@
         </div>
 
     </nav>
-    <form class="flex flex-row mt-10 bg-teal-400 p-5 rounded-md items-center max-w-2xl min-w-84" hx-encoding='multipart/form-data' hx-post='/upload'>
+    <form class="flex flex-row mt-10 bg-teal-400 p-5 rounded-md items-center max-w-2xl min-w-84 mb-10 " hx-encoding='multipart/form-data' hx-post='/upload'>
         <input type='file' name='file'>
         <button class="border outline-4 rounded tracking-tight font-semibold text-white p-2 hover:border-white">
             Upload
@@ -29,13 +31,35 @@
 
     </form>
 
-    {{ block "film-list-element" .}}
+    {{ block "editing" .}}
     {{ if .State }}
-    <div class="flex flex-row justify-center items-center">
+    <form  hx-post='/cropper' method="post" class="flex flex-row justify-center items-center max-h-screen" hx-encoding='multipart/form-data'>
         <div class = "justify-center items-center">
-            <img src = "{{.File}}" alt="gambar" width="500" height="600" class="rounded-md">
+            <img id="image" src = "{{.File}}" alt="gambar" width="500" height="600" class="rounded-md">
         </div>
-        <form hx-post='/cropper' method="post" class="flex flex-col m-3 gap-5" hx-encoding='multipart/form-data'>
+        <script>
+            var image = document.getElementById('image');
+            var cropper = new Cropper(image, {
+                aspectRatio: NaN,
+                crop(event) {
+                    console.log(event.detail.x);
+                    console.log(event.detail.y);
+                    console.log(event.detail.width);
+                    console.log(event.detail.height);
+                    console.log(event.detail.rotate);
+                    console.log(event.detail.scaleX);
+                    console.log(event.detail.scaleY);
+                    var cropData = cropper.getData();
+                    // Send cropData to the server
+                    document.getElementById('input1').value = Math.round(cropData.x);
+                    document.getElementById('input2').value = Math.round(cropData.width)+Math.round(cropData.x);;
+                    document.getElementById('input3').value = Math.round(cropData.y);
+                    document.getElementById('input4').value = Math.round(cropData.height)+Math.round(cropData.y);
+                },
+            });
+
+        </script>
+        <div class="flex flex-col m-3 gap-5">
             <a>Image size is {{.Width}} and {{.Height}}</a>
             <div class="flex flex-row gap-2 justify-center items-center">
                 <label for="input1">X1:</label>
@@ -54,14 +78,32 @@
                 <input type="number" id="input4" name="y2"><br>
             </div>
             <div class="flex flex-row gap-2 justify-center items-center">
-                <label for="input4">Make it grayscale?</label>
+                <label for="input5">Make it grayscale?</label>
                 <input type="checkbox" id="input5" name="grayscale"><br>
             </div>
-            <input type="submit" value="Submit" class="border outline-4 rounded tracking-tight font-semibold text-white p-2 hover:border-white">
-        </form>
+
+            <button
+                    id="showButton"
+                    class="border outline-4 rounded tracking-tight font-semibold text-white p-2 hover:border-white">
+                Submit
+            </button>
+        </div>
+    </form>
+    {{ end }}
+    {{ end }}
+{{block "preview" .}}
+{{if .State}}
+<div id="modal" class="flex flex-col bg-teal-400 justify-center items-center max-h-screen">
+    <div class="mb-10 mt-5">
+        <img src="{{.File}}" alt="gambar"  class="rounded-md max-h-screen">
     </div>
-    {{ end }}
-    {{ end }}
+    <button>
+        <a href="{{.File}}" download="image.jpg" class="border outline-4 rounded tracking-tight font-semibold text-white p-2 hover:border-white">Download</a>
+    </button>
+</div>
+{{end}}
+{{end}}
+
 
 
 

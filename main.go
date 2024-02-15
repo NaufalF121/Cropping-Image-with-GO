@@ -8,6 +8,8 @@ import (
 	"image"
 	"image/draw"
 	"image/jpeg"
+	"image/png"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -46,7 +48,10 @@ func upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	}
 
 	// Reset the read pointer to the start of the file
-	img.Seek(0, 0)
+	_, err = img.Seek(0, 0)
+	if err != nil {
+		panic(err.Error() + "Error in seeking file")
+	}
 
 	// Get the content type of the file
 	contentType := http.DetectContentType(buffer)
@@ -81,10 +86,16 @@ func upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	}
 	imgFile, err := os.Open(fileDir)
 	imek, _, err := image.Decode(imgFile)
+	if err != nil {
+		imek, err = png.Decode(imgFile)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
 	width := imek.Bounds().Dx()
 	height := imek.Bounds().Dy()
 
-	err = tmpl.ExecuteTemplate(w, "film-list-element", Response{File: "asset/gambar." + contentType[6:], State: true, Width: width, Height: height})
+	err = tmpl.ExecuteTemplate(w, "editing", Response{File: "asset/gambar." + contentType[6:], State: true, Width: width, Height: height})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -107,11 +118,17 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	time.Sleep(1 * time.Second)
 	x1, _ := strconv.Atoi(r.PostFormValue("x1"))
-	x2, _ := strconv.Atoi(r.PostFormValue("x2"))
 	y1, _ := strconv.Atoi(r.PostFormValue("y1"))
+	x2, _ := strconv.Atoi(r.PostFormValue("x2"))
 	y2, _ := strconv.Atoi(r.PostFormValue("y2"))
 	gray := r.FormValue("grayscale") == "on"
-	imgFile, err := os.Open("./asset/gambar.jpeg")
+	fmt.Println(r.PostFormValue("input1"), y1, x2, y2, gray)
+	files, err := ioutil.ReadDir("./asset")
+	if err != nil {
+		log.Fatal(err)
+
+	}
+	imgFile, err := os.Open("./asset" + "/" + files[0].Name())
 	if err != nil {
 		panic(err)
 	}
@@ -142,6 +159,17 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if err != nil {
 		return
 	}
+	tmpl, err := template.ParseFiles("template/index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = tmpl.ExecuteTemplate(w, "preview", Response{File: "output" + "/" + files[0].Name(), State: true, Width: 0, Height: 0})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+	}
+
 }
 
 func main() {
@@ -151,6 +179,7 @@ func main() {
 	router.GET("/", renderTemplate)
 	router.POST("/cropper", cropper)
 	router.ServeFiles("/asset/*filepath", http.Dir("./asset"))
+	router.ServeFiles("/output/*filepath", http.Dir("./output"))
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
