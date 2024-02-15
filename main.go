@@ -35,6 +35,9 @@ func convertToGrayscale(img image.Image) *image.Gray {
 }
 
 func upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	err := os.RemoveAll("./asset/gambar.jpeg")
+	err = os.RemoveAll("./asset/gambar.png")
+	err = os.RemoveAll("./asset/gambar.jpg")
 	img, _, err := r.FormFile("file")
 
 	if err != nil {
@@ -164,7 +167,7 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	err = tmpl.ExecuteTemplate(w, "preview", Response{File: "output" + "/" + files[0].Name(), State: true, Width: 0, Height: 0})
+	err = tmpl.ExecuteTemplate(w, "preview", Response{File: "output/cropped_gambar.jpeg", State: true, Width: 0, Height: 0})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 
