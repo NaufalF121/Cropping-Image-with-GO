@@ -1,13 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/julienschmidt/httprouter"
+	"github.com/sunshineplan/imgconv"
 	"html/template"
 	"image"
+	"image/color"
 	"image/draw"
-	"image/jpeg"
+	_ "image/jpeg"
 	"image/png"
 	"io/ioutil"
 	"log"
@@ -34,30 +35,57 @@ func convertToGrayscale(img image.Image) *image.Gray {
 	return grayImage
 }
 
+func separateRedChannel(img image.Image) *image.RGBA64 {
+	bounds := img.Bounds()
+	width, height := bounds.Max.X, bounds.Max.Y
+
+	redImage := image.NewRGBA64(image.Rect(0, 0, width, height))
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			r, _, _, a := img.At(x, y).RGBA()
+			redImage.Set(x, y, color.RGBA64{R: uint16(r), G: 0, B: 0, A: uint16(a)})
+		}
+	}
+
+	return redImage
+}
+
+func separateGreenChannel(img image.Image) *image.RGBA64 {
+	bounds := img.Bounds()
+	width, height := bounds.Max.X, bounds.Max.Y
+
+	greenImage := image.NewRGBA64(image.Rect(0, 0, width, height))
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			_, g, _, a := img.At(x, y).RGBA()
+			greenImage.Set(x, y, color.RGBA64{R: 0, G: uint16(g), B: 0, A: uint16(a)})
+		}
+	}
+	return greenImage
+}
+
+func separateBlueChannel(img image.Image) *image.RGBA64 {
+	bounds := img.Bounds()
+	width, height := bounds.Max.X, bounds.Max.Y
+
+	blueImage := image.NewRGBA64(image.Rect(0, 0, width, height))
+
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			_, _, b, a := img.At(x, y).RGBA()
+			blueImage.Set(x, y, color.RGBA64{R: 0, G: 0, B: uint16(b), A: uint16(a)})
+		}
+	}
+
+	return blueImage
+}
+
 func upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	err := os.RemoveAll("./asset/gambar.jpeg")
 	err = os.RemoveAll("./asset/gambar.png")
 	err = os.RemoveAll("./asset/gambar.jpg")
-	img, _, err := r.FormFile("file")
-
-	if err != nil {
-		panic(err.Error() + "Error in uploading file")
-	}
-
-	buffer := make([]byte, 512)
-	_, err = img.Read(buffer)
-	if err != nil {
-		panic(err.Error() + "Error reading file")
-	}
-
-	// Reset the read pointer to the start of the file
-	_, err = img.Seek(0, 0)
-	if err != nil {
-		panic(err.Error() + "Error in seeking file")
-	}
-
-	// Get the content type of the file
-	contentType := http.DetectContentType(buffer)
 
 	if _, err := os.Stat("./asset"); os.IsNotExist(err) {
 		// Create the directory
@@ -68,39 +96,69 @@ func upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		}
 		fmt.Println("Directory created successfully.")
 	}
-	fileDir := "./asset/gambar." + contentType[6:]
-	file, err := os.Create(fileDir)
-	if err != nil {
-		panic(err.Error() + "Error in creating file")
 
+	img, _, err := r.FormFile("file")
+
+	if err != nil {
+		panic(err.Error() + "Error in uploading file")
 	}
-	defer file.Close()
-	buf := bytes.NewBuffer(nil)
-	if _, err := buf.ReadFrom(img); err != nil {
-		panic(err.Error() + "Error in reading file")
+
+	// Decode the image file
+	imgDecoded, _, err := image.Decode(img)
+	if err != nil {
+		panic(err.Error() + "Error decoding image file")
 	}
-	if _, err := file.Write(buf.Bytes()); err != nil {
-		panic(err.Error() + "Error in writing file")
+
+	// Create a new file with .png extension
+	pngFile, err := os.Create("./asset/gambar.png")
+	if err != nil {
+		panic(err.Error() + "Error creating PNG file")
 	}
+	defer pngFile.Close()
+
+	// Encode the image to the new file using the PNG encoder
+	err = imgconv.Write(pngFile, imgDecoded, &imgconv.FormatOption{Format: imgconv.PNG})
+
+	if err != nil {
+		panic(err.Error() + "Error encoding image to PNG")
+	}
+
+	// Get the content type of the file
+	//contentType := http.DetectContentType(buffer)
+
+	fileDir := "./asset/gambar.png"
+	//file, err := os.Create(fileDir)
+	//if err != nil {
+	//	panic(err.Error() + "Error in creating file")
+	//
+	//}
+	//defer file.Close()
+	//buf := bytes.NewBuffer(nil)
+	//if _, err := buf.ReadFrom(img); err != nil {
+	//	panic(err.Error() + "Error in reading file")
+	//}
+	//if _, err := file.Write(buf.Bytes()); err != nil {
+	//	panic(err.Error() + "Error in writing file")
+	//}
 	tmpl, err := template.ParseFiles("template/index.html")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	imgFile, err := os.Open(fileDir)
-	imek, _, err := image.Decode(imgFile)
 	if err != nil {
-		imek, err = png.Decode(imgFile)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		panic(err)
+	}
+	imek, err := png.Decode(imgFile)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	width := imek.Bounds().Dx()
 	height := imek.Bounds().Dy()
 
-	err = tmpl.ExecuteTemplate(w, "editing", Response{File: "asset/gambar." + contentType[6:], State: true, Width: width, Height: height})
+	err = tmpl.ExecuteTemplate(w, "editing", Response{File: "asset/gambar.png", State: true, Width: width, Height: height})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println("Error in executing template")
 	}
 
 }
@@ -124,8 +182,9 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	y1, _ := strconv.Atoi(r.PostFormValue("y1"))
 	x2, _ := strconv.Atoi(r.PostFormValue("x2"))
 	y2, _ := strconv.Atoi(r.PostFormValue("y2"))
-	gray := r.FormValue("grayscale") == "on"
-	fmt.Println(r.PostFormValue("input1"), y1, x2, y2, gray)
+
+	imgChannel := r.FormValue("imageChannel")
+
 	files, err := ioutil.ReadDir("./asset")
 	if err != nil {
 		log.Fatal(err)
@@ -140,9 +199,20 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Decode the image file
 	img, _, err := image.Decode(imgFile)
 	if err != nil {
-		panic(err)
+		img, err = png.Decode(imgFile)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
-	if gray {
+
+	switch imgChannel {
+	case "red":
+		img = separateRedChannel(img)
+	case "green":
+		img = separateGreenChannel(img)
+	case "blue":
+		img = separateBlueChannel(img)
+	case "grayscale":
 		img = convertToGrayscale(img)
 	}
 	bounds := img.Bounds()
@@ -152,13 +222,13 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Define the rectangle for cropping
 	rect := image.Rect(x1, y1, x2, y2)
 	croppedImage := rgba.SubImage(rect)
-	outFile, err := os.Create("./output/cropped_gambar.jpeg")
+	outFile, err := os.Create("./output/cropped_gambar.png")
 	if err != nil {
 		log.Fatalf("Error creating file: %v", err)
 	}
 	defer outFile.Close()
 
-	err = jpeg.Encode(outFile, croppedImage, &jpeg.Options{Quality: jpeg.DefaultQuality})
+	err = png.Encode(outFile, croppedImage)
 	if err != nil {
 		return
 	}
@@ -167,7 +237,7 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	err = tmpl.ExecuteTemplate(w, "preview", Response{File: "output/cropped_gambar.jpeg", State: true, Width: 0, Height: 0})
+	err = tmpl.ExecuteTemplate(w, "preview", Response{File: "output/cropped_gambar.png", State: true, Width: 0, Height: 0})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 

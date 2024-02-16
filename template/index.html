@@ -77,10 +77,14 @@
                 <label for="input4">Y2:</label>
                 <input type="number" id="input4" name="y2"><br>
             </div>
-            <div class="flex flex-row gap-2 justify-center items-center">
-                <label for="input5">Make it grayscale?</label>
-                <input type="checkbox" id="input5" name="grayscale"><br>
-            </div>
+
+            <select id="imageChannel" name="imageChannel">
+                <option value="default">Default</option>
+                <option value="red">Red Channel</option>
+                <option value="green">Green Channel</option>
+                <option value="blue">Blue Channel</option>
+                <option value="grayscale">Grayscale</option>
+            </select>
 
             <button
                     id="showButton"
