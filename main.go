@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/julienschmidt/httprouter"
-	"github.com/sunshineplan/imgconv"
 	"html/template"
 	"image"
 	"image/color"
@@ -15,7 +13,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
+
+	"github.com/julienschmidt/httprouter"
+	"github.com/sunshineplan/imgconv"
 )
 
 type Response struct {
@@ -88,8 +88,18 @@ func upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	err = os.RemoveAll("./asset/gambar.jpg")
 
 	if _, err := os.Stat("./asset"); os.IsNotExist(err) {
-		// Create the directory
+
 		err := os.MkdirAll("./asset", 0755)
+		if err != nil {
+			fmt.Println("Error creating directory:", err)
+			return
+		}
+		fmt.Println("Directory created successfully.")
+	}
+
+	if _, err := os.Stat("./output"); os.IsNotExist(err) {
+
+		err := os.MkdirAll("./output", 0755)
 		if err != nil {
 			fmt.Println("Error creating directory:", err)
 			return
@@ -103,27 +113,23 @@ func upload(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 		panic(err.Error() + "Error in uploading file")
 	}
 
-	// Decode the image file
 	imgDecoded, _, err := image.Decode(img)
 	if err != nil {
 		panic(err.Error() + "Error decoding image file")
 	}
 
-	// Create a new file with .png extension
 	pngFile, err := os.Create("./asset/gambar.png")
 	if err != nil {
 		panic(err.Error() + "Error creating PNG file")
 	}
 	defer pngFile.Close()
 
-	// Encode the image to the new file using the PNG encoder
 	err = imgconv.Write(pngFile, imgDecoded, &imgconv.FormatOption{Format: imgconv.PNG})
 
 	if err != nil {
 		panic(err.Error() + "Error encoding image to PNG")
 	}
 
-	// Get the content type of the file
 	//contentType := http.DetectContentType(buffer)
 
 	fileDir := "./asset/gambar.png"
@@ -177,7 +183,7 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, _ httprouter.Params)
 }
 
 func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	time.Sleep(1 * time.Second)
+
 	x1, _ := strconv.Atoi(r.PostFormValue("x1"))
 	y1, _ := strconv.Atoi(r.PostFormValue("y1"))
 	x2, _ := strconv.Atoi(r.PostFormValue("x2"))
@@ -196,7 +202,6 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	}
 	defer imgFile.Close()
 
-	// Decode the image file
 	img, _, err := image.Decode(imgFile)
 	if err != nil {
 		img, err = png.Decode(imgFile)
@@ -219,7 +224,6 @@ func cropper(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	rgba := image.NewRGBA(bounds)
 	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
 
-	// Define the rectangle for cropping
 	rect := image.Rect(x1, y1, x2, y2)
 	croppedImage := rgba.SubImage(rect)
 	outFile, err := os.Create("./output/cropped_gambar.png")
